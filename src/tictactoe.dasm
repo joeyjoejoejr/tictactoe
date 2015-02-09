@@ -171,6 +171,7 @@ VerticalBlank
   bmi ButtonNotPressed
 
   lda PlayerYpos   ; load y-pos and multiply by 3
+  clc              ; clear the carry
   adc PlayerYpos
   adc PlayerYpos
 
@@ -184,16 +185,16 @@ VerticalBlank
   beq AddMiddle
 
   lda #<XEdge
-  sta Pos0GrPtr-2,y
+  sta Pos0GrPtr,y ; Why do I have to do this?
   lda #>XEdge
-  sta Pos0GrPtr-1,y
+  sta Pos0GrPtr+1,y
   jmp ButtonNotPressed
 
 AddMiddle
   lda #<XMiddle
-  sta Pos0GrPtr-2,y
+  sta Pos0GrPtr,y
   lda #>XMiddle
-  sta Pos0GrPtr-1,y
+  sta Pos0GrPtr+1,y
 
 ButtonNotPressed
 

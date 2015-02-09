@@ -2,7 +2,7 @@ PLAYFIELD_BMPS = $(wildcard playfields/*.bmp)
 INCLUDES  = includes/vcs.h includes/macro.h
 DASM = dasm
 STELLA = /Applications/Stella.app/Contents/MacOS/Stella
-DASMFLAGS = -f3 -ldist/tictactoe.txt -odist/tictactoe.bin -Idist
+DASMFLAGS = -f3 -ldist/tictactoe.txt -odist/tictactoe.bin -sdist/tictactoe.sym -Idist
 BINFILE = tictactoe.bin
 
 all: $(BINFILE)
