@@ -43,6 +43,8 @@ PlayerYpos ds 1
 ; Temporary Pointer
 TempPtr ds 2
 
+PreviousJoyStickState ds 1
+
 ; 20 bytes 236 left
 
 ;------------------------------------------------------------------------------
@@ -71,8 +73,8 @@ Clear sta 0,x
   lda #$0e                            ; white board
   sta COLUPF                          ; set playfield color
 
-  lda #$84                            ; set player 1 to blue
-  sta COLUP0
+  lda #$46
+  sta COLUP0                          ; Player Sprite is Red
 
   ; load all of slots with empty graphics
   lda #<BlankEdge
@@ -90,9 +92,9 @@ Clear sta 0,x
   lda #>BlankEdge
   sta Pos2GrPtr+1
 
-  lda #<XEdge
+  lda #<BlankEdge
   sta Pos3GrPtr
-  lda #>XEdge
+  lda #>BlankEdge
   sta Pos3GrPtr+1
 
   lda #<BlankMiddle
@@ -121,9 +123,18 @@ Clear sta 0,x
   sta Pos8GrPtr+1
 
   ; set player to 0,0
-  lda #0
+  lda #1
   sta PlayerXpos
+  lda #1
   sta PlayerYpos
+
+  ; quadruple sprite size
+  lda #%0000111
+  sta NUSIZ0
+
+  ; set joystick state to 0
+  lda #0
+  sta PreviousJoyStickState
 
 ;------------------------------------------------------------------------------
 ; Main Loop
@@ -156,6 +167,93 @@ VerticalSync
 ; VerticleBlank Subroutine 37 lines 37 * 76 = 2815 cycles max
 
 VerticalBlank
+  lda INPT4
+  bmi ButtonNotPressed
+
+  lda PlayerYpos   ; load y-pos and multiply by 3
+  adc PlayerYpos
+  adc PlayerYpos
+
+  adc PlayerXpos  ; get final position ex y=1 x=2  3 x 1 + 2 = 5
+  asl             ; multipy by 2 to get offset
+
+  tay             ; transfer y to a
+
+  lda PlayerXpos  ; check if xpos is middle
+  cmp #1
+  beq AddMiddle
+
+  lda #<XEdge
+  sta Pos0GrPtr-2,y
+  lda #>XEdge
+  sta Pos0GrPtr-1,y
+  jmp ButtonNotPressed
+
+AddMiddle
+  lda #<XMiddle
+  sta Pos0GrPtr-2,y
+  lda #>XMiddle
+  sta Pos0GrPtr-1,y
+
+ButtonNotPressed
+
+  lda PreviousJoyStickState
+  cmp SWCHA
+  beq SkipMove
+
+  lda SWCHA
+  sta PreviousJoyStickState
+
+  lda #%10000000 ;Right?
+  bit SWCHA
+  bne SkipMoveRight
+
+  lda PlayerXpos
+  cmp #2
+  beq SkipMove
+
+  inc PlayerXpos ; Move Position Right
+
+SkipMoveRight
+
+  lda #%01000000 ;left?
+  bit SWCHA
+  bne SkipMoveLeft
+
+  lda PlayerXpos
+  cmp #0
+  beq SkipMove
+
+  dec PlayerXpos ; Move Position Left
+
+SkipMoveLeft
+
+  lda #%00100000 ;down?
+  bit SWCHA
+  bne SkipMoveDown
+
+  lda PlayerYpos
+  cmp #2
+  beq SkipMove
+
+  inc PlayerYpos ; Move Position Left
+
+SkipMoveDown
+
+  lda #%00010000 ;down?
+  bit SWCHA
+  bne SkipMoveUp
+
+  lda PlayerYpos
+  cmp #0
+  beq SkipMove
+
+  dec PlayerYpos ; Move Position Left
+
+SkipMoveUp
+
+SkipMove
+
   rts
 
 ;------------------------------------------------------------------------------
@@ -172,25 +270,80 @@ Kernel
 ;------------------------------------------------------------------------------
 ; FirstRow 64 Lines per row the first and last row have 4 lines of padding
   sta WSYNC
+  ; determine horizontal position of cursor
+  lda PlayerXpos ; 3 Load the x position of cursor
+  cmp #0         ; 2 (5)
+  bne SecondPos  ; 2[3] (7)
+
+  SLEEP 17
+  sta RESP0 ; 3
+  jmp EndXPos
+
+SecondPos ; starts at (8)
+  cmp #1       ; 2 (10)
+  bne ThirdPos
+
+  SLEEP 27
+  sta RESP0 ; 3
+  jmp EndXPos
+
+ThirdPos
+  cmp #2
+  bne EndXPos
+
+  SLEEP 37
+  sta RESP0 ; 3
+  jmp EndXPos
+
+EndXPos
+
   sta WSYNC
   sta WSYNC
+  ; determine whether sprite is on this row
+  lda #<BlankCursor ; 4 (4) load the low bite of blank cursor
+  sta TempPtr       ; 3 (7)
+  lda #>BlankCursor ; 4 (11) load the load bite of blank cursor
+  sta TempPtr+1     ; 3 (14)
+
+  lda PlayerYpos    ; 3 (17) is the player y position 0?
+  cmp #0             ; 2 (19)
+  bne SkipFirstRowSpritePointer ; 3[2] (21)
+
+  lda #<Cursor      ; 4 (25) load the low bite of cursor
+  sta TempPtr       ; 3 (28)
+  lda #>Cursor      ; 4 (32) load the load bite of cursor
+  sta TempPtr+1     ; 3 (35)
+SkipFirstRowSpritePointer
+
   sta WSYNC
 
-  ldx #56       ; 2 (2)
+  ldx #28       ; 2 (2)
   lda PF1       ; 3 (5) This just wastes 3 cycles to sync with the next rows
 FirstRowSegment
   txa            ; 2 (7) Load graphics from tables
   lsr            ; 2 (9) Divide by 4
-  lsr            ; 2 (11)
-  tay            ; 2 (13) Transfer into y register for offsetting
-  lda (Pos0GrPtr),y ; 5 (18)
-  sta PF1        ; 3 (21)
-  lda (Pos1GrPtr),y ; 5 (26)
-  sta PF2        ; 3 (29)  47 left
+  tay            ; 2 (11) Transfer into y register for offsetting
+  lda (Pos0GrPtr),y ; 5 (16)
+  sta PF1           ; 3 (19)
+  lda (Pos1GrPtr),y ; 5 (24)
+  sta PF2           ; 3 (27)
 
-  SLEEP 4        ; (33) sleep until it's safe to reload PF1
-  lda (Pos2GrPtr),y ; 5 (38) PF1 has been drawn it's safe to change the graphic
-  sta PF1        ; 3 (41)
+  SLEEP 15
+
+  lda (Pos2GrPtr),y ; 5 (42) PF1 has been drawn it's safe to change the graphic
+  sta PF1           ; 3 (45)
+
+  sta WSYNC
+  lda (Pos0GrPtr),y ; 5 (10)
+  sta PF1           ; 3 (13) ; Don't overwrite Position 1
+
+  lda (TempPtr),y   ; 5 (18)
+  sta GRP0          ; 3 (21)
+
+  sleep 24
+
+  lda (Pos2GrPtr),y ; 5 (42) PF1 has been drawn it's safe to change the graphic
+  sta PF1           ; 3 (45)
 
   sta WSYNC      ; 3 THIS must happen by 73
   dex            ; 2 (2)
@@ -212,23 +365,51 @@ FirstRowSegment
   sta WSYNC
   sta WSYNC
   sta WSYNC
+  ; determine whether sprite is on this row
+  lda #<BlankCursor ; 4 (4) load the low bite of blank cursor
+  sta TempPtr       ; 3 (7)
+  lda #>BlankCursor ; 4 (11) load the load bite of blank cursor
+  sta TempPtr+1     ; 3 (14)
+
+  lda PlayerYpos    ; 3 (17) is the player y position 0?
+  cmp #1            ; 2 (19)
+  bne SkipSecondRowSpritePointer ; 3[2] (21)
+
+  lda #<Cursor      ; 4 (25) load the low bite of cursor
+  sta TempPtr       ; 3 (28)
+  lda #>Cursor      ; 4 (32) load the load bite of cursor
+  sta TempPtr+1     ; 3 (35)
+SkipSecondRowSpritePointer
+
   sta WSYNC
 
-  ldx #56       ; 2 (2)
+  ldx #28       ; 2 (2)
   lda PF1       ; 3 (5) This just wastes 3 cycles to sync with the next rows
 SecondRowSegment
   txa            ; 2 (7) Load graphics from tables
   lsr            ; 2 (9) Divide by 4
-  lsr            ; 2 (11)
-  tay            ; 2 (13) Transfer into y register for offsetting
-  lda (Pos3GrPtr),y ; 5 (18)
-  sta PF1        ; 3 (21)
-  lda (Pos4GrPtr),y ; 5 (26)
-  sta PF2        ; 3 (29)  47 left
+  tay            ; 2 (11) Transfer into y register for offsetting
+  lda (Pos3GrPtr),y ; 5 (16)
+  sta PF1           ; 3 (19)
+  lda (Pos4GrPtr),y ; 5 (24)
+  sta PF2           ; 3 (27)
 
-  SLEEP 4        ; (33) sleep until it's safe to reload PF1
-  lda (Pos5GrPtr),y ; 5 (38) PF1 has been drawn it's safe to change the graphic
-  sta PF1        ; 3 (41)
+  SLEEP 15
+
+  lda (Pos5GrPtr),y ; 5 (42) PF1 has been drawn it's safe to change the graphic
+  sta PF1           ; 3 (45)
+
+  sta WSYNC
+  lda (Pos3GrPtr),y ; 5 (10)
+  sta PF1           ; 3 (13) ; Don't overwrite Position 1
+
+  lda (TempPtr),y   ; 5 (18)
+  sta GRP0          ; 3 (21)
+
+  sleep 24
+
+  lda (Pos5GrPtr),y ; 5 (42) PF1 has been drawn it's safe to change the graphic
+  sta PF1           ; 3 (45)
 
   sta WSYNC      ; 3 THIS must happen by 73
   dex            ; 2 (2)
@@ -250,23 +431,51 @@ SecondRowSegment
   sta WSYNC
   sta WSYNC
   sta WSYNC
+  ; determine whether sprite is on this row
+  lda #<BlankCursor ; 4 (4) load the low bite of blank cursor
+  sta TempPtr       ; 3 (7)
+  lda #>BlankCursor ; 4 (11) load the load bite of blank cursor
+  sta TempPtr+1     ; 3 (14)
+
+  lda PlayerYpos    ; 3 (17) is the player y position 0?
+  cmp #2            ; 2 (19)
+  bne SkipThirdRowSpritePointer ; 3[2] (21)
+
+  lda #<Cursor      ; 4 (25) load the low bite of cursor
+  sta TempPtr       ; 3 (28)
+  lda #>Cursor      ; 4 (32) load the load bite of cursor
+  sta TempPtr+1     ; 3 (35)
+SkipThirdRowSpritePointer
+
   sta WSYNC
 
-  ldx #56       ; 2 (2)
+  ldx #28       ; 2 (2)
   lda PF1       ; 3 (5) This just wastes 3 cycles to sync with the next rows
 ThirdRowSegment
   txa            ; 2 (7) Load graphics from tables
   lsr            ; 2 (9) Divide by 4
-  lsr            ; 2 (11)
-  tay            ; 2 (13) Transfer into y register for offsetting
-  lda (Pos6GrPtr),y ; 5 (18)
-  sta PF1        ; 3 (21)
-  lda (Pos7GrPtr),y ; 5 (26)
-  sta PF2        ; 3 (29)  47 left
+  tay            ; 2 (11) Transfer into y register for offsetting
+  lda (Pos6GrPtr),y ; 5 (16)
+  sta PF1           ; 3 (19)
+  lda (Pos7GrPtr),y ; 5 (24)
+  sta PF2           ; 3 (27)
 
-  SLEEP 4        ; (33) sleep until it's safe to reload PF1
-  lda (Pos8GrPtr),y ; 5 (38) PF1 has been drawn it's safe to change the graphic
-  sta PF1        ; 3 (41)
+  SLEEP 15
+
+  lda (Pos8GrPtr),y ; 5 (42) PF1 has been drawn it's safe to change the graphic
+  sta PF1           ; 3 (45)
+
+  sta WSYNC
+  lda (Pos6GrPtr),y ; 5 (10)
+  sta PF1           ; 3 (13) ; Don't overwrite Position 1
+
+  lda (TempPtr),y   ; 5 (18)
+  sta GRP0          ; 3 (21)
+
+  sleep 24
+
+  lda (Pos8GrPtr),y ; 5 (42) PF1 has been drawn it's safe to change the graphic
+  sta PF1           ; 3 (45)
 
   sta WSYNC      ; 3 THIS must happen by 73
   dex            ; 2 (2)
@@ -402,6 +611,28 @@ OMiddle
   .byte #%00000110
   .byte #%00000110 ; Why an extra?
 
+; Player Cursor
+
+BlankCursor
+  .byte #0,#0,#0,#0,#0,#0,#0
+  .byte #0,#0,#0,#0,#0,#0,#0,#0 ; Why an extra?
+
+Cursor
+  .byte #%00000000
+  .byte #%11111111
+  .byte #%10000001
+  .byte #%10000001
+  .byte #%10000001
+  .byte #%10000001
+  .byte #%10000001
+  .byte #%10000001
+  .byte #%10000001
+  .byte #%10000001
+  .byte #%10000001
+  .byte #%10000001
+  .byte #%10000001
+  .byte #%11111111
+  .byte #%11111111
 ;------------------------------------------------------------------------------
   org $FFFA
 
