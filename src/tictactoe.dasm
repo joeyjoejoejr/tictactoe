@@ -36,7 +36,14 @@ Pos6GrPtr ds 2
 Pos7GrPtr ds 2
 Pos8GrPtr ds 2
 
-; 18 bytes 238 left
+; Player Cursor xPos (0-2) yPos (0-2)
+PlayerXpos ds 1
+PlayerYpos ds 1
+
+; Temporary Pointer
+TempPtr ds 2
+
+; 20 bytes 236 left
 
 ;------------------------------------------------------------------------------
 
@@ -68,24 +75,24 @@ Clear sta 0,x
   sta COLUP0
 
   ; load all of slots with empty graphics
-  lda #<XEdge
+  lda #<BlankEdge
   sta Pos0GrPtr
-  lda #>XEdge
+  lda #>BlankEdge
   sta Pos0GrPtr+1
 
-  lda #<XMiddle
+  lda #<BlankMiddle
   sta Pos1GrPtr
-  lda #>XMiddle
+  lda #>BlankMiddle
   sta Pos1GrPtr+1
 
-  lda #<OEdge
+  lda #<BlankEdge
   sta Pos2GrPtr
-  lda #>OEdge
+  lda #>BlankEdge
   sta Pos2GrPtr+1
 
-  lda #<BlankEdge
+  lda #<XEdge
   sta Pos3GrPtr
-  lda #>BlankEdge
+  lda #>XEdge
   sta Pos3GrPtr+1
 
   lda #<BlankMiddle
@@ -113,42 +120,57 @@ Clear sta 0,x
   lda #>BlankEdge
   sta Pos8GrPtr+1
 
-;------------------------------------------------------------------------------
-
-StartOfFrame
-  ; Start of a new frame
-  ; Start of vertical blank
+  ; set player to 0,0
   lda #0
-  sta VBLANK
+  sta PlayerXpos
+  sta PlayerYpos
 
-  lda #2
-  sta VSYNC
+;------------------------------------------------------------------------------
+; Main Loop
+Main
+  jsr VerticalSync  ; 6 Jump to Vertical Sync
+  jsr VerticalBlank ; 6 Jump to Vertical Blank
+  jsr Kernel        ; 6 Jump to Kernel
+  jsr Overscan      ; 6 Jump to Overscan
+  jmp Main
+
+;------------------------------------------------------------------------------
+; VerticalSync Subroutine
+VerticalSync
+  lda #2      ; 2 Load with 2 so D1=1 to turn on VSYNC signal
+  ldx #49
+
+  sta WSYNC
+  sta VSYNC ; D1=1 turns the Vertical Sync signal on
+  stx TIM64T ; set timer to go of in 41 scanlines 49 = (41 * 76) / 64
 
   sta WSYNC
   sta WSYNC
-  sta WSYNC                           ; 3 scanlines of VSYNC signal
 
   lda #0
-  sta VSYNC
+  sta WSYNC                           ; 3rd scanline of VSYNC signal
+  sta VSYNC                           ; D1 = 0 Turns Off VSYNC signal
+  rts
 
 ;------------------------------------------------------------------------------
-; 37 lines of vertical blank
+; VerticleBlank Subroutine 37 lines 37 * 76 = 2815 cycles max
 
-  ldx #0                              ; start at 0
-VerticalBlank sta WSYNC               ; wait for scanline 37 times
-  inx
-  cpx #37
-  bne VerticalBlank
+VerticalBlank
+  rts
 
 ;------------------------------------------------------------------------------
 ; 192 scanlines of picture 76 cycles per scanline
 
+Kernel
+; turn on display
+  sta WSYNC
+  lda INTIM ; check the timer
+  bne Kernel
+             ; A is still 0
+  sta VBLANK ; D1=0 turns off VBLANK signal (display on)
+
 ;------------------------------------------------------------------------------
 ; FirstRow 64 Lines per row the first and last row have 4 lines of padding
-
-  sta PF1
-  sta PF2
-
   sta WSYNC
   sta WSYNC
   sta WSYNC
@@ -260,25 +282,33 @@ ThirdRowSegment
   sta WSYNC
 
 ;------------------------------------------------------------------------------
+; Cleanup
 
   lda #0                               ; Clear player graphics
   sta PF1
   sta PF2
 
-  lda #%01000010                       ; end of screen enter blanking
-  sta VBLANK
+  rts ; return from Kernel
 
-  ; 30 scanlines of overscan
 
-  ldx #0
-Overscan sta WSYNC
-  inx
-  cpx #30
-  bne Overscan
+;------------------------------------------------------------------------------
+; Overscan Subroutine
 
-  jmp StartOfFrame
+Overscan
+  sta WSYNC
+  lda #2
+  sta VBLANK ; D1=1 turn image output off
 
-  include "tictactoe.bmp"
+  lda #32    ; set timer for 27 scanline 27 * 76 / 64
+  sta TIM64T ; set timer to tick every 64 ticks
+
+  ; logic goes here 2052 max
+osWait
+  sta WSYNC
+  lda INTIM
+  bne osWait
+  rts
+
 ;------------------------------------------------------------------------------
 ; Data Tables
 
@@ -306,70 +336,70 @@ BlankMiddle
 
 XEdge
   .byte #%00000000
+  .byte #%01000001
+  .byte #%01000001
+  .byte #%00100010
+  .byte #%00100010
+  .byte #%00010100
+  .byte #%00001000
+  .byte #%00001000
+  .byte #%00010100
+  .byte #%00100010
+  .byte #%00100010
+  .byte #%01000001
+  .byte #%01000001
   .byte #%00000000
-  .byte #%01000001
-  .byte #%01000001
-  .byte #%00100010
-  .byte #%00100010
-  .byte #%00010100
-  .byte #%00001000
-  .byte #%00001000
-  .byte #%00010100
-  .byte #%00100010
-  .byte #%00100010
-  .byte #%01000001
-  .byte #%01000001
   .byte #%00000000 ; Why an extra?
 
 XMiddle
   .byte #%00000110
+  .byte #%00010110
+  .byte #%00010110
+  .byte #%00100110
+  .byte #%00100110
+  .byte #%01000110
+  .byte #%10000110
+  .byte #%10000110
+  .byte #%01000110
+  .byte #%00100110
+  .byte #%00100110
+  .byte #%00010110
+  .byte #%00010110
   .byte #%00000110
-  .byte #%00010110
-  .byte #%00010110
-  .byte #%00100110
-  .byte #%00100110
-  .byte #%01000110
-  .byte #%10000110
-  .byte #%10000110
-  .byte #%01000110
-  .byte #%00100110
-  .byte #%00100110
-  .byte #%00010110
-  .byte #%00010110
   .byte #%00000110 ; Why an extra?
 
 OEdge
   .byte #%00000000
+  .byte #%00111110
+  .byte #%01000001
+  .byte #%01000001
+  .byte #%01000001
+  .byte #%01000001
+  .byte #%01000001
+  .byte #%01000001
+  .byte #%01000001
+  .byte #%01000001
+  .byte #%01000001
+  .byte #%01000001
+  .byte #%00111110
   .byte #%00000000
-  .byte #%00111110
-  .byte #%01000001
-  .byte #%01000001
-  .byte #%01000001
-  .byte #%01000001
-  .byte #%01000001
-  .byte #%01000001
-  .byte #%01000001
-  .byte #%01000001
-  .byte #%01000001
-  .byte #%01000001
-  .byte #%00111110
   .byte #%00000000 ; Why an extra?
 
 OMiddle
   .byte #%00000110
+  .byte #%11100110
+  .byte #%00010110
+  .byte #%00010110
+  .byte #%00010110
+  .byte #%00010110
+  .byte #%00010110
+  .byte #%00010110
+  .byte #%00010110
+  .byte #%00010110
+  .byte #%00010110
+  .byte #%00010110
+  .byte #%11100110
   .byte #%00000110
-  .byte #%11100110
-  .byte #%00010110
-  .byte #%00010110
-  .byte #%00010110
-  .byte #%00010110
-  .byte #%00010110
-  .byte #%00010110
-  .byte #%00010110
-  .byte #%00010110
-  .byte #%00010110
-  .byte #%00010110
-  .byte #%11100110
   .byte #%00000110 ; Why an extra?
 
 ;------------------------------------------------------------------------------
