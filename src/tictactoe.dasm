@@ -25,8 +25,18 @@
   seg.u vars
   org $80                             ; start of RAM
 
-SpriteTablePtr ds 2                   ; Pointer for the datatable
-SpriteEnd ds 1                        ; Possition of top of sprite from bottom
+; pointers to the graphics for each slot
+Pos0GrPtr ds 2
+Pos1GrPtr ds 2
+Pos2GrPtr ds 2
+Pos3GrPtr ds 2
+Pos4GrPtr ds 2
+Pos5GrPtr ds 2
+Pos6GrPtr ds 2
+Pos7GrPtr ds 2
+Pos8GrPtr ds 2
+
+; 18 bytes 238 left
 
 ;------------------------------------------------------------------------------
 
@@ -57,20 +67,51 @@ Clear sta 0,x
   lda #$84                            ; set player 1 to blue
   sta COLUP0
 
-  ; load the sprite ptr in little endian format
-  lda #<SpriteDataX ;2
-  sta SpriteTablePtr ;3
+  ; load all of slots with empty graphics
+  lda #<XEdge
+  sta Pos0GrPtr
+  lda #>XEdge
+  sta Pos0GrPtr+1
 
-  lda #>SpriteDataX ;2                 ; store the high byte
-  sta SpriteTablePtr+1 ;3
+  lda #<XMiddle
+  sta Pos1GrPtr
+  lda #>XMiddle
+  sta Pos1GrPtr+1
 
-  ; set sprite verticle position
-  lda #116
-  sta SpriteEnd
+  lda #<OEdge
+  sta Pos2GrPtr
+  lda #>OEdge
+  sta Pos2GrPtr+1
 
-  ; double the size?
-  lda #%0000111
-  sta NUSIZ0
+  lda #<BlankEdge
+  sta Pos3GrPtr
+  lda #>BlankEdge
+  sta Pos3GrPtr+1
+
+  lda #<BlankMiddle
+  sta Pos4GrPtr
+  lda #>BlankMiddle
+  sta Pos4GrPtr+1
+
+  lda #<BlankEdge
+  sta Pos5GrPtr
+  lda #>BlankEdge
+  sta Pos5GrPtr+1
+
+  lda #<BlankEdge
+  sta Pos6GrPtr
+  lda #>BlankEdge
+  sta Pos6GrPtr+1
+
+  lda #<BlankMiddle
+  sta Pos7GrPtr
+  lda #>BlankMiddle
+  sta Pos7GrPtr+1
+
+  lda #<BlankEdge
+  sta Pos8GrPtr
+  lda #>BlankEdge
+  sta Pos8GrPtr+1
 
 ;------------------------------------------------------------------------------
 
@@ -101,40 +142,122 @@ VerticalBlank sta WSYNC               ; wait for scanline 37 times
 
 ;------------------------------------------------------------------------------
 ; 192 scanlines of picture 76 cycles per scanline
-  ldx #64
+
+;------------------------------------------------------------------------------
+; FirstRow 64 Lines per row the first and last row have 4 lines of padding
+
+  sta PF1
+  sta PF2
+
+  sta WSYNC
+  sta WSYNC
+  sta WSYNC
+  sta WSYNC
+
+  ldx #56       ; 2 (2)
+  lda PF1       ; 3 (5) This just wastes 3 cycles to sync with the next rows
 FirstRowSegment
-  lda SpriteDataX,x                   ; 4 : 18 load sprite
-  sta GRP0                            ; 3 : 22
+  txa            ; 2 (7) Load graphics from tables
+  lsr            ; 2 (9) Divide by 4
+  lsr            ; 2 (11)
+  tay            ; 2 (13) Transfer into y register for offsetting
+  lda (Pos0GrPtr),y ; 5 (18)
+  sta PF1        ; 3 (21)
+  lda (Pos1GrPtr),y ; 5 (26)
+  sta PF2        ; 3 (29)  47 left
 
-  SLEEP 13
-  sta RESP0 ; 3
+  SLEEP 4        ; (33) sleep until it's safe to reload PF1
+  lda (Pos2GrPtr),y ; 5 (38) PF1 has been drawn it's safe to change the graphic
+  sta PF1        ; 3 (41)
 
-  SLEEP 27
-  sta RESP0 ; 3
+  sta WSYNC      ; 3 THIS must happen by 73
+  dex            ; 2 (2)
+  bne FirstRowSegment ; 3[2] (5)
 
-  lda screen_STRIP_3+127,x            ; 4 : 11 PF2 Left
-  sta PF2                             ; 3 : 14
-
-  lda screen_STRIP_2+127,x            ; 4 : 4 PF1 Left
-  sta PF1                             ; 3 : 7
-
+; 4 Solid lines at bottom of row
+  lda #%11111111
+  sta PF1
+  sta PF2
   sta WSYNC
-  dex
-  bne FirstRowSegment
-
-  ldx #128                              ; scanline counter
-RestSegment
-  lda screen_STRIP_2,x                ; 4+ PF1 Left
-  sta PF1                               ; 3
-
-  lda screen_STRIP_3,x                ; 4+ PF2 Left
-  sta PF2                               ; 3
-                                        ; 14 total
-
-
   sta WSYNC
-  dex
-  bne RestSegment
+  sta WSYNC
+  sta WSYNC
+
+;------------------------------------------------------------------------------
+; Second Row
+
+; 4 Solid lines at top of row
+  sta WSYNC
+  sta WSYNC
+  sta WSYNC
+  sta WSYNC
+
+  ldx #56       ; 2 (2)
+  lda PF1       ; 3 (5) This just wastes 3 cycles to sync with the next rows
+SecondRowSegment
+  txa            ; 2 (7) Load graphics from tables
+  lsr            ; 2 (9) Divide by 4
+  lsr            ; 2 (11)
+  tay            ; 2 (13) Transfer into y register for offsetting
+  lda (Pos3GrPtr),y ; 5 (18)
+  sta PF1        ; 3 (21)
+  lda (Pos4GrPtr),y ; 5 (26)
+  sta PF2        ; 3 (29)  47 left
+
+  SLEEP 4        ; (33) sleep until it's safe to reload PF1
+  lda (Pos5GrPtr),y ; 5 (38) PF1 has been drawn it's safe to change the graphic
+  sta PF1        ; 3 (41)
+
+  sta WSYNC      ; 3 THIS must happen by 73
+  dex            ; 2 (2)
+  bne SecondRowSegment ; 3[2] (5)
+
+; 4 Solid lines at bottom of row
+  lda #%11111111
+  sta PF1
+  sta PF2
+  sta WSYNC
+  sta WSYNC
+  sta WSYNC
+  sta WSYNC
+
+;------------------------------------------------------------------------------
+; Third Row
+
+; 4 Solid lines at top of row
+  sta WSYNC
+  sta WSYNC
+  sta WSYNC
+  sta WSYNC
+
+  ldx #56       ; 2 (2)
+  lda PF1       ; 3 (5) This just wastes 3 cycles to sync with the next rows
+ThirdRowSegment
+  txa            ; 2 (7) Load graphics from tables
+  lsr            ; 2 (9) Divide by 4
+  lsr            ; 2 (11)
+  tay            ; 2 (13) Transfer into y register for offsetting
+  lda (Pos6GrPtr),y ; 5 (18)
+  sta PF1        ; 3 (21)
+  lda (Pos7GrPtr),y ; 5 (26)
+  sta PF2        ; 3 (29)  47 left
+
+  SLEEP 4        ; (33) sleep until it's safe to reload PF1
+  lda (Pos8GrPtr),y ; 5 (38) PF1 has been drawn it's safe to change the graphic
+  sta PF1        ; 3 (41)
+
+  sta WSYNC      ; 3 THIS must happen by 73
+  dex            ; 2 (2)
+  bne ThirdRowSegment ; 3[2] (5)
+
+; 4 Blank lines at bottom of row
+  lda #0
+  sta PF1
+  sta PF2
+  sta WSYNC
+  sta WSYNC
+  sta WSYNC
+  sta WSYNC
 
 ;------------------------------------------------------------------------------
 
@@ -159,74 +282,95 @@ Overscan sta WSYNC
 ;------------------------------------------------------------------------------
 ; Data Tables
 
-  align 256,0
-SpriteHeight = 42
-SpriteDataX
+  .align 256
+BlankEdge
+  .byte #0,#0,#0,#0,#0,#0,#0
+  .byte #0,#0,#0,#0,#0,#0,#0,#0 ; Why an extra?
+
+BlankMiddle
+  .byte #%00000110
+  .byte #%00000110
+  .byte #%00000110
+  .byte #%00000110
+  .byte #%00000110
+  .byte #%00000110
+  .byte #%00000110
+  .byte #%00000110
+  .byte #%00000110
+  .byte #%00000110
+  .byte #%00000110
+  .byte #%00000110
+  .byte #%00000110
+  .byte #%00000110
+  .byte #%00000110 ; Why an extra?
+
+XEdge
   .byte #%00000000
   .byte #%00000000
+  .byte #%01000001
+  .byte #%01000001
+  .byte #%00100010
+  .byte #%00100010
+  .byte #%00010100
+  .byte #%00001000
+  .byte #%00001000
+  .byte #%00010100
+  .byte #%00100010
+  .byte #%00100010
+  .byte #%01000001
+  .byte #%01000001
+  .byte #%00000000 ; Why an extra?
+
+XMiddle
+  .byte #%00000110
+  .byte #%00000110
+  .byte #%00010110
+  .byte #%00010110
+  .byte #%00100110
+  .byte #%00100110
+  .byte #%01000110
+  .byte #%10000110
+  .byte #%10000110
+  .byte #%01000110
+  .byte #%00100110
+  .byte #%00100110
+  .byte #%00010110
+  .byte #%00010110
+  .byte #%00000110 ; Why an extra?
+
+OEdge
   .byte #%00000000
   .byte #%00000000
-  .byte #%00000000
-  .byte #%00000000
-  .byte #%00000000
-  .byte #%00000000
-  .byte #%00000000
-  .byte #%00000000
-  .byte #%00000000
-  .byte #%00000000
-  .byte #%10000001
-  .byte #%10000001                    ; this is a 24 high X shape
-  .byte #%10000001
-  .byte #%10000001
-  .byte #%10000001
-  .byte #%01000010
-  .byte #%01000010
-  .byte #%01000010
-  .byte #%01000010
-  .byte #%01000010
-  .byte #%01000010
-  .byte #%00100100
-  .byte #%00100100
-  .byte #%00100100
-  .byte #%00100100
-  .byte #%00100100
-  .byte #%00100100
-  .byte #%00100100
-  .byte #%00011000
-  .byte #%00011000
-  .byte #%00011000
-  .byte #%00011000
-  .byte #%00011000
-  .byte #%00011000
-  .byte #%00100100
-  .byte #%00100100
-  .byte #%00100100
-  .byte #%00100100
-  .byte #%00100100
-  .byte #%00100100
-  .byte #%01000010
-  .byte #%01000010
-  .byte #%01000010
-  .byte #%01000010
-  .byte #%01000010
-  .byte #%01000010
-  .byte #%10000001
-  .byte #%10000001
-  .byte #%10000001
-  .byte #%10000001
-  .byte #%10000001
-  .byte #%10000001
-  .byte #%00000000
-  .byte #%00000000
-  .byte #%00000000
-  .byte #%00000000
-  .byte #%00000000
-  .byte #%00000000
-  .byte #%00000000
-  .byte #%00000000
-  .byte #%00000000
-  .byte #%00000000
-  .byte #%00000000
+  .byte #%00111110
+  .byte #%01000001
+  .byte #%01000001
+  .byte #%01000001
+  .byte #%01000001
+  .byte #%01000001
+  .byte #%01000001
+  .byte #%01000001
+  .byte #%01000001
+  .byte #%01000001
+  .byte #%01000001
+  .byte #%00111110
+  .byte #%00000000 ; Why an extra?
+
+OMiddle
+  .byte #%00000110
+  .byte #%00000110
+  .byte #%11100110
+  .byte #%00010110
+  .byte #%00010110
+  .byte #%00010110
+  .byte #%00010110
+  .byte #%00010110
+  .byte #%00010110
+  .byte #%00010110
+  .byte #%00010110
+  .byte #%00010110
+  .byte #%00010110
+  .byte #%11100110
+  .byte #%00000110 ; Why an extra?
 
 ;------------------------------------------------------------------------------
   org $FFFA
