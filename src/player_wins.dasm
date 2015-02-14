@@ -1,0 +1,87 @@
+PlayerWins
+  lda #%00000000                      ; don't reflect playfield
+  sta CTRLPF
+  sta FrameCount
+
+PlayerWinsLoop
+  jsr VerticalSync  ; 6 Jump to Vertical Sync
+  jsr PWVerticleBlank ; 6 Jump to Vertical Blank
+  jsr PWKernel        ; 6 Jump to Kernel
+  jsr Overscan      ; 6 Jump to Overscan
+  jmp PlayerWinsLoop
+
+;------------------------------------------------------------------------------
+; VerticleBlank Subroutine 37 lines 37 * 76 = 2815 cycles max
+PWVerticleBlank
+  inc FrameCount
+  lda FrameCount
+  cmp #60
+  bcc .SkipButtonToggle
+  lda #1
+  sta PlayerButtonActive        ; Toggle on player button after one second
+
+
+.SkipButtonToggle
+
+  lda PlayerButtonActive
+  beq .ButtonNotPressed         ; Don't let the player press button
+
+  lda INPT4
+  bmi .ButtonNotPressed
+  lda #$88                      ; Wait some time before changing screens
+  sta T1024T
+
+.wait
+  sta WSYNC
+  lda INTIM
+  bne .wait
+
+  jmp Reset
+
+.ButtonNotPressed
+  rts
+
+;------------------------------------------------------------------------------
+; 192 scanlines of picture 76 cycles per scanline
+
+PWKernel
+; turn on display
+  sta WSYNC
+  lda INTIM ; check the timer
+  bne PWKernel
+             ; A is still 0
+  sta VBLANK ; D1=0 turns off VBLANK signal (display on)
+
+  sta WSYNC
+  ldx #192
+
+.KernelLoop
+  lda screen_STRIP_1-1,x ; 4
+  sta PF0 ; 3
+  lda screen_STRIP_2-1,x
+  sta PF1
+  lda screen_STRIP_3-1,x
+  sta PF2
+
+  sleep 14
+
+  lda screen_STRIP_4-1,x ; 4
+  sta PF0 ; 3
+  lda screen_STRIP_5-1,x
+  sta PF1
+  lda screen_STRIP_6-1,x
+  sta PF2
+
+  sta WSYNC
+  dex
+  bne .KernelLoop
+  lda #0
+  sta PF0
+  sta PF1
+  sta PF2
+  rts
+
+;------------------------------------------------------------------------------
+; 192 scanlines of picture 76 cycles per scanline
+
+  include "youwin.bmp"
