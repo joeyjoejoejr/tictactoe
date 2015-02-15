@@ -1,0 +1,55 @@
+Draw
+  lda #%00000000                      ; don't reflect playfield
+  sta CTRLPF
+  sta FrameCount
+
+DrawLoop
+  jsr VerticalSync  ; 6 Jump to Vertical Sync
+  jsr PWVerticleBlank ; 6 Jump to Vertical Blank
+  jsr DKernel        ; 6 Jump to Kernel
+  jsr Overscan      ; 6 Jump to Overscan
+  jmp DrawLoop
+
+;------------------------------------------------------------------------------
+; 192 scanlines of picture 76 cycles per scanline
+
+DKernel
+; turn on display
+  sta WSYNC
+  lda INTIM ; check the timer
+  bne DKernel
+             ; A is still 0
+  sta VBLANK ; D1=0 turns off VBLANK signal (display on)
+
+  sta WSYNC
+  ldx #192
+
+DKernelLoop
+  txa ; 2
+  lsr ; 2
+  lsr ; 2
+  tay ; 2
+  lda draw_STRIP_1-1,y ; 4
+  sta PF0 ; 3
+  lda draw_STRIP_2-1,y
+  sta PF1
+  lda draw_STRIP_3-1,y
+  sta PF2
+
+  sleep 6
+
+  lda draw_STRIP_4-1,y ; 4
+  sta PF0 ; 3
+  lda draw_STRIP_5-1,y
+  sta PF1
+  lda draw_STRIP_6-1,y
+  sta PF2
+
+  sta WSYNC
+  dex
+  bne DKernelLoop
+  lda #0
+  sta PF0
+  sta PF1
+  sta PF2
+  rts

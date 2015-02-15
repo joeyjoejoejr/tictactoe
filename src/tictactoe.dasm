@@ -63,7 +63,13 @@ PlayerButtonActive ds 1
 TempPtr ds 2
 TempByte ds 1
 
-; 37 bytes 219 left
+EndScreenPtr ds 2
+
+; 39 bytes 217 left
+
+;------------------------------------------------------------------------------
+; Contants
+EndScreenDelay = 30
 
 ;------------------------------------------------------------------------------
 
@@ -84,9 +90,6 @@ Clear sta 0,x
 
 ;------------------------------------------------------------------------------
 ; Once only initialization
-
-  lda #%00000001                      ; reflected playfield
-  sta CTRLPF
 
   lda #$0e                            ; white board
   sta COLUPF                          ; set playfield color
@@ -149,16 +152,22 @@ Clear sta 0,x
   ; quadruple sprite size
   lda #%00000111
   sta NUSIZ0
+  lda #0
   sta PlayerButtonActive
 
+  include "intro.dasm"
 ;------------------------------------------------------------------------------
 ; Main Loop
 Main
+  lda #%00000001                      ; reflected playfield
+  sta CTRLPF
+
+MainLoop
   jsr VerticalSync  ; 6 Jump to Vertical Sync
   jsr VerticalBlank ; 6 Jump to Vertical Blank
   jsr Kernel        ; 6 Jump to Kernel
   jsr Overscan      ; 6 Jump to Overscan
-  jmp Main
+  jmp MainLoop
 
 ;------------------------------------------------------------------------------
 ; VerticalSync Subroutine
@@ -260,23 +269,6 @@ ButtonNotPressed
 
                 ; 28 (111)
 
-  ;------------------------------------------------------------------------------
-  ; Check Player Win 188 (299) cycles to NoWinner
-  ; Setting up the TempPtr to pass to the checking subroutine
-  lda #<HumanPlayerBoard        ; 3 (3) Store the low byte first
-  sta TempPtr                   ; 3 (6)
-  lda #>HumanPlayerBoard        ; 3 (9) Store the high byte next
-  sta TempPtr+1                 ; 3 (12)
-
-  jsr CheckWinner               ; 6 + 163(worst_case) (181) six cycles for the jump
-  beq NoWinner                  ; 2[3](184) Show player winning screen
-  lda #0                        ; 2
-  sta PlayerButtonActive        ; 3 Turn of player button
-  jmp PlayerWins                ; is a winner
-
-NoWinner
-                                ; 184 (295)
-
   lda PlayerButtonActive ; Check if the button is active 1 yes 0 no
   bne SkipDrawingComputer
 
@@ -310,10 +302,12 @@ CheckPlayerCouldWin
   jmp AddComputerPosition       ; 3
 
 PickSpot
-  ; pick first empty spot
+  ; pick first empty spot by preference
   ldx #8
 PickerLoop
-  lda CombinedBoard,x
+  lda ComputerPositonPreference,x
+  tay
+  lda CombinedBoard,y
   beq BreakPickerLoop
   dex
   bpl PickerLoop
@@ -321,7 +315,7 @@ PickerLoop
   jmp SkipDrawingComputer      ; no spot
 
 BreakPickerLoop
-  txa                          ; x is an open position
+  tya                          ; y is an open position
 
   ;------------------------------------------------------------------------------
   ; Add position to computer  board
@@ -379,6 +373,85 @@ CompAddMiddle
   sta Pos0GrPtr+1,y ; 4 (28)
 
 SkipDrawingComputer
+
+  ;------------------------------------------------------------------------------
+  ; Check Player Win 188 (299) cycles to NoWinner
+  ; Setting up the TempPtr to pass to the checking subroutine
+  lda #<HumanPlayerBoard        ; 3 (3) Store the low byte first
+  sta TempPtr                   ; 3 (6)
+  lda #>HumanPlayerBoard        ; 3 (9) Store the high byte next
+  sta TempPtr+1                 ; 3 (12)
+
+  jsr CheckWinner               ; 6 + 163(worst_case) (181) six cycles for the jump
+  beq NoPlayerWin                  ; 2[3](184) Show player winning screen
+
+  ; Setup TempPtr
+  lda #<PlayerWins
+  sta EndScreenPtr
+  lda #>PlayerWins
+  sta EndScreenPtr+1
+
+  ; Set the framecount for 1 seconds
+  lda #EndScreenDelay
+  sta FrameCount
+
+  lda #0                        ; 2
+  sta PlayerButtonActive        ; 3 Turn off player button
+  jmp DelayedEnd                ; is a winner
+
+NoPlayerWin
+
+  ;------------------------------------------------------------------------------
+  ; Check Computer Win 188 (299) cycles to NoWinner
+  ; Setting up the TempPtr to pass to the checking subroutine
+  lda #<ComputerPlayerBoard        ; 3 (3) Store the low byte first
+  sta TempPtr                   ; 3 (6)
+  lda #>ComputerPlayerBoard        ; 3 (9) Store the high byte next
+  sta TempPtr+1                 ; 3 (12)
+
+  jsr CheckWinner               ; 6 + 163(worst_case) (181) six cycles for the jump
+  beq NoComputerWin                  ; 2[3](184) Show player winning screen
+
+  ; Setup TempPtr
+  lda #<PlayerLoses
+  sta EndScreenPtr
+  lda #>PlayerLoses
+  sta EndScreenPtr+1
+
+  ; Set the framecount for 1 seconds
+  lda #EndScreenDelay
+  sta FrameCount
+
+  lda #0                        ; 2
+  sta PlayerButtonActive        ; 3 Turn off player button
+  jmp DelayedEnd                ; is a winner
+
+NoComputerWin
+                                ; 184 (295)
+
+  ldx #8
+CheckDraw
+  lda CombinedBoard,x
+  beq BreakCheckDraw
+  dex
+  bpl CheckDraw
+
+  ; Setup TempPtr
+  lda #<Draw
+  sta EndScreenPtr
+  lda #>Draw
+  sta EndScreenPtr+1
+
+  ; Set the framecount for 1 seconds
+  lda #EndScreenDelay
+  sta FrameCount
+
+  lda #0                        ; 2
+  sta PlayerButtonActive        ; 3 Turn off player button
+  jmp DelayedEnd                ; is a winner
+
+BreakCheckDraw
+  txa                          ; x is an open position
 
   ;------------------------------------------------------------------------------
   ; Move Player With Joystick
@@ -877,8 +950,24 @@ SpecialCouldWin
   rts
 
 ;------------------------------------------------------------------------------
+; Delayed End: will jump to end in Tempptr after a delay set in FrameCount
+DelayedEnd
+  jsr VerticalSync
+  jsr Kernel
+  jsr Overscan
+  dec FrameCount
+  bne DelayedEnd
+  jmp (EndScreenPtr)
+
+;------------------------------------------------------------------------------
 ; End Game Kernals
   include "player_wins.dasm"
+  include "player_loses.dasm"
+  include "draw.dasm"
+  include "tictactoe.bmp"
+  include "youwin.bmp"
+  include "youlose.bmp"
+  include "draw.bmp"
 
 
 ;------------------------------------------------------------------------------
@@ -983,6 +1072,10 @@ SpecialCouldWinConds
 SpecialCouldWinPosition
   .byte #0
   .byte #0, #4, #8
+
+; Position Preferences Ascending Prefference
+ComputerPositonPreference
+  .byte  #0, #2, #6, #8 ,#1, #3, #5, #7 , #4
 
 BlankEdge
   .byte #0,#0,#0,#0,#0,#0,#0

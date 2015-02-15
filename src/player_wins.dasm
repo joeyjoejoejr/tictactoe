@@ -56,20 +56,24 @@ PWKernel
   ldx #192
 
 .KernelLoop
-  lda screen_STRIP_1-1,x ; 4
+  txa ; 2
+  lsr ; 2
+  lsr ; 2
+  tay ; 2
+  lda youwin_STRIP_1-1,y ; 4
   sta PF0 ; 3
-  lda screen_STRIP_2-1,x
+  lda youwin_STRIP_2-1,y
   sta PF1
-  lda screen_STRIP_3-1,x
+  lda youwin_STRIP_3-1,y
   sta PF2
 
-  sleep 14
+  sleep 6
 
-  lda screen_STRIP_4-1,x ; 4
+  lda youwin_STRIP_4-1,y ; 4
   sta PF0 ; 3
-  lda screen_STRIP_5-1,x
+  lda youwin_STRIP_5-1,y
   sta PF1
-  lda screen_STRIP_6-1,x
+  lda youwin_STRIP_6-1,y
   sta PF2
 
   sta WSYNC
@@ -80,5 +84,3 @@ PWKernel
   sta PF1
   sta PF2
   rts
-
-  include "youwin.bmp"

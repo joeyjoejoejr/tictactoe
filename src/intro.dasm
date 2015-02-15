@@ -1,0 +1,80 @@
+Intro
+  lda #%00000000                      ; don't reflect playfield
+  sta CTRLPF
+  sta FrameCount
+
+IntoLoop
+  jsr VerticalSync  ; 6 Jump to Vertical Sync
+  jsr IVerticleBlank ; 6 Jump to Vertical Blank
+  jsr IKernel        ; 6 Jump to Kernel
+  jsr Overscan      ; 6 Jump to Overscan
+  jmp IntoLoop
+
+;------------------------------------------------------------------------------
+; 192 scanlines of picture 76 cycles per scanline
+
+IVerticleBlank
+  ; "Randomize" who goes first
+  lda PlayerButtonActive
+  eor #1                  ;toggle player starts or not per frame
+  sta PlayerButtonActive
+
+  lda INPT4       ; 3 (3) Check if button pressed
+  bmi StayOnIntro ; 3[2] (5)
+
+  lda #$88                      ; Wait some time before changing screens
+  sta T1024T
+
+.iWait ; I thought these were subroutine local...
+  sta WSYNC
+  lda INTIM
+  bne .iWait
+  ; If button pressed pull address (top 2 bytes) off the stack and jump to main
+  ; instead
+  pla
+  pla
+  jmp Main
+
+StayOnIntro
+  rts
+
+IKernel
+; turn on display
+  sta WSYNC
+  lda INTIM ; check the timer
+  bne IKernel
+             ; A is still 0
+  sta VBLANK ; D1=0 turns off VBLANK signal (display on)
+
+  sta WSYNC
+  ldx #192
+
+IKernelLoop
+  txa ; 2
+  lsr ; 2
+  lsr ; 2
+  tay ; 2
+  lda tictactoe_STRIP_1-1,y ; 4
+  sta PF0 ; 3
+  lda tictactoe_STRIP_2-1,y
+  sta PF1
+  lda tictactoe_STRIP_3-1,y
+  sta PF2
+
+  sleep 6
+
+  lda tictactoe_STRIP_4-1,y ; 4
+  sta PF0 ; 3
+  lda tictactoe_STRIP_5-1,y
+  sta PF1
+  lda tictactoe_STRIP_6-1,y
+  sta PF2
+
+  sta WSYNC
+  dex
+  bne IKernelLoop
+  lda #0
+  sta PF0
+  sta PF1
+  sta PF2
+  rts
