@@ -81,7 +81,4 @@ PWKernel
   sta PF2
   rts
 
-;------------------------------------------------------------------------------
-; 192 scanlines of picture 76 cycles per scanline
-
   include "youwin.bmp"
