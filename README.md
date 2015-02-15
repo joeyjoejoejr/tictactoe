@@ -1,10 +1,14 @@
-tictactoe
+TicTacToe
 =============================
 
 Unbeatable tic-tac-toe game
 
 To Run On Stella
 ------------
+
+Open the tictactoe.bin file found in `dist/` in stella.
+
+or
 
 Edit the makefile with the path to your stella executable
 Execute the following commands:
