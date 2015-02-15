@@ -1,7 +1,7 @@
 tictactoe
 =============================
 
-Unbeatable tic-tak-toe game
+Unbeatable tic-tac-toe game
 
 To Run On Stella
 ------------
