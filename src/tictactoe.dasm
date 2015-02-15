@@ -63,6 +63,7 @@ PlayerButtonActive ds 1
 TempPtr ds 2
 TempByte ds 1
 
+PositionPreferencePointer ds 2
 EndScreenPtr ds 2
 
 ; 39 bytes 217 left
@@ -213,6 +214,25 @@ VerticalBlank
 
   tax             ; 2 (2) transfer player position to x to countdown 2^(player_pos)
                   ; changing 0 into 0000 0001 and 8 into 1000 0000
+
+  lda PositionPreferencePointer ; if it's zero set it
+  bne CheckPostistionTaken
+
+  cpx #4              ; position is the middle
+  bne SetStandardPreference
+  lda #<CenterFirstPositionPreference
+  sta PositionPreferencePointer
+  lda #>CenterFirstPositionPreference
+  sta PositionPreferencePointer+1
+  jmp CheckPostistionTaken
+
+SetStandardPreference
+  lda #<ComputerPositionPreference
+  sta PositionPreferencePointer
+  lda #>ComputerPositionPreference
+  sta PositionPreferencePointer+1
+
+CheckPostistionTaken
   lda CombinedBoard,x ; skip setting player position if already taken
   bne ButtonNotPressed
 
@@ -272,9 +292,18 @@ ButtonNotPressed
   lda PlayerButtonActive ; Check if the button is active 1 yes 0 no
   bne SkipDrawingComputer
 
+  lda PositionPreferencePointer ; if it's zero computer goes first set 
+  bne CheckComputerCouldWin     ; standard strategy
+
+  lda #<ComputerPositionPreference
+  sta PositionPreferencePointer
+  lda #>ComputerPositionPreference
+  sta PositionPreferencePointer+1
+
   ;------------------------------------------------------------------------------
   ; Check Computer Could Win
   ; Setting up the TempPtr to pass to the checking subroutine
+CheckComputerCouldWin
   lda #<ComputerPlayerBoard        ; 3 (3) Store the low byte first
   sta TempPtr                   ; 3 (6)
   lda #>ComputerPlayerBoard        ; 3 (9) Store the high byte next
@@ -303,19 +332,19 @@ CheckPlayerCouldWin
 
 PickSpot
   ; pick first empty spot by preference
-  ldx #8
+  ldy #8
 PickerLoop
-  lda ComputerPositonPreference,x
-  tay
-  lda CombinedBoard,y
+  lda (PositionPreferencePointer),y
+  tax
+  lda CombinedBoard,x
   beq BreakPickerLoop
-  dex
+  dey
   bpl PickerLoop
 
   jmp SkipDrawingComputer      ; no spot
 
 BreakPickerLoop
-  tya                          ; y is an open position
+  txa                          ; y is an open position
 
   ;------------------------------------------------------------------------------
   ; Add position to computer  board
@@ -1074,8 +1103,11 @@ SpecialCouldWinPosition
   .byte #0, #4, #8
 
 ; Position Preferences Ascending Prefference
-ComputerPositonPreference
+ComputerPositionPreference
   .byte  #0, #2, #6, #8 ,#1, #3, #5, #7 , #4
+
+CenterFirstPositionPreference
+  .byte  #4, #7, #5, #3, #1 ,#8, #6, #2, #0
 
 BlankEdge
   .byte #0,#0,#0,#0,#0,#0,#0
